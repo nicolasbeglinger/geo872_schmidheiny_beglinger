@@ -20,7 +20,6 @@ ggplot() +
   geom_sf(data = data_points)
 
 
-
 # data_points_shp <- st_write(data_points, "verkehrsunfaelle_stadt_zh_points_new.shp", driver = "ESRI Shapefile")
 # data_points_shp <- st_write(zaehlstellen, "zaehlstellen_cleaned_points.shp", driver = "ESRI Shapefile")
 
