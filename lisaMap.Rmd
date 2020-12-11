@@ -1,0 +1,205 @@
+---
+title: "lisa Map"
+author: "Nicolas Beglinger"
+date: "12/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pkgTest <- function(x) 
+  {
+    if (!require(x, character.only = TRUE))
+    {
+      install.packages(x, dep = TRUE)
+        if(!require(x, character.only = TRUE)) stop("Package not found")
+    }
+}
+
+pkgTest("sf")
+pkgTest("tidyverse")
+pkgTest("tmap")
+pkgTest("spdep")
+
+#for palette explorer
+pkgTest("tmaptools")
+pkgTest("shiny")
+pkgTest("shinyjs")
+
+tmap_mode("view")
+```
+
+
+```{r}
+bycicles = st_read("shapefiles/hexBins/Chi_Hex_Bicycles.shp") %>%
+  mutate(CHI = chi)
+```
+
+
+```{r}
+neighbourList <- poly2nb(bycicles, row.names = "id")
+
+weightMatrix <- nb2listw(neighbourList)
+```
+
+```{r}
+globalMoran <- moran.test(bycicles$CHI, weightMatrix, na.action = na.exclude, zero.policy = TRUE)
+```
+
+```{r}
+lmoran = cbind(select(bycicles, -geometry), localmoran(bycicles$CHI, weightMatrix, na.action = na.exclude, 
+                                    zero.policy = TRUE, p.adjust.method="none", adjust.x=TRUE)) %>%
+  as_tibble()
+
+lmoran
+
+# centers the local Moran's around the mean
+lmoran$Ii <- lmoran$Ii - mean(lmoran$Ii, na.rm = TRUE) 
+lmoran$lag.CHI <- lag.listw(weightMatrix, lmoran$CHI, NAOK = TRUE)
+
+# centers the variable of interest around its mean
+lmoran$CHIs <- lmoran$CHI - mean(lmoran$CHI, na.rm = TRUE) 
+lmoran$lag.CHI <- lmoran$lag.CHI - mean(lmoran$lag.CHI, na.rm = TRUE) 
+
+signif = 0.05
+
+
+lmoran <- lmoran %>% 
+  mutate(quadrant = ifelse(CHIs>0 & lag.CHI > 0, 1, 0)) %>% 
+  mutate(quadrant = ifelse(CHIs<0 & lag.CHI < 0, 2, quadrant)) %>% 
+  mutate(quadrant = ifelse(CHIs<0 & lag.CHI > 0, 3, quadrant)) %>% 
+  mutate(quadrant = ifelse(CHIs>0 & lag.CHI < 0, 4, quadrant)) %>%   
+  mutate(quadrant = ifelse(lmoran$"Pr.z...0." > signif, 0, quadrant))
+
+  
+lisaBycicles <- merge(bycicles, lmoran)
+```
+
+
+```{r}
+breaks = c(0, 1, 2, 3, 4, 5)
+
+lisa = tm_shape(lisaBycicles %>%
+                  filter(!is.na(quadrant)),
+                bbox = st_bbox(filter(lisaBycicles, !is.na(quadrant) & quadrant != 0))) + 
+  tm_fill(
+    col = "quadrant", 
+    breaks = breaks, 
+    palette = c("#F7F7F7","#FF0000","#0000FF","#87CEFA", "#FF6347"), 
+    labels = c("Not significant", "High-High","Low-Low","Low-High","High-Low"), 
+    title="") +
+  tm_legend(text.size = 1)  +
+  tm_scale_bar(position = c("LEFT", "BOTTOM"),text.size = 1.0)+
+  tm_compass(type = "8star",   position = c("RIGHT", "BOTTOM"),      show.labels = 2,   text.size = 0.5) +
+    tm_borders(alpha=.5,
+               lwd = 0.1) +
+  tm_layout( frame = FALSE,  title = "LISA with the R p-values ")
+
+chi = tm_shape(bycicles %>%
+                 filter(!is.na(CHI)),
+                bbox = st_bbox(filter(lisaBycicles, !is.na(quadrant) & quadrant != 0))) +
+  tm_polygons(
+    col = "CHI",
+    lwd = 0.1
+)
+
+tmap_arrange(chi,
+             lisa,
+             sync = TRUE)
+```
+
+
+```{r}
+tm_shape(lisaBycicles %>%
+                 filter(!is.na(CHI)),
+                bbox = st_bbox(filter(lisaBycicles, !is.na(quadrant) & quadrant != 0))) + 
+  tm_fill(
+    col = "quadrant", 
+    breaks = breaks, 
+    style = "fixed",
+    palette = c("#F7F7F7","#FF0000","#0000FF","#87CEFA", "#FF6347"), 
+    labels = c("Not significant", "High-High","Low-Low","Low-High","High-Low"), 
+    title="") +
+  tm_borders(alpha=.5,
+               lwd = 0.1) +
+  tm_legend(text.size = 1)  +
+  tm_scale_bar(position = c("LEFT", "BOTTOM"),
+               text.size = 1.0) +
+  tm_compass(type = "8star",
+             position = c("RIGHT", "BOTTOM"),
+             show.labels = 2,
+             text.size = 0.5) +
+  tm_layout(frame = FALSE,  
+            title = "LISA with the R p-values") +
+tm_shape(bycicles %>%
+                 filter(!is.na(CHI)),
+         bbox = st_bbox(filter(lisaBycicles, !is.na(quadrant) & quadrant != 0))) +
+  tm_polygons(
+    col = "CHI",
+    lwd = 0.1
+  )
+
+
+```
+
+
+```{r, eval = FALSE}
+accidents <- st_read("shapefiles/accidents/accidentsOnRoads_ZH.shp")
+bycicle = filter(accidents, AccdnIB == "true")
+
+MyHexBin <- function(x, extent = NA, cellsize = 100, mrg = 100) {
+    
+    if (is.na(extent)) {
+      require(sf)
+      x1 <- st_coordinates(x)[,1]
+      y2 <- st_coordinates(x)[,2]
+      minx1 <- min(x1) - mrg
+      maxx1 <- max(x1) + mrg
+      miny2 <- min(y2) - mrg
+      maxy2 <- max(y2) + mrg
+    } else {
+      minx1 <- extent[1] - mrg
+      maxx1 <- extent[3] + mrg
+      miny2 <- extent[2] - mrg
+      maxy2 <- extent[4] + mrg
+    }
+
+    # coords defines the bounding rectangle of the hexagonal tessellation,
+    # including the margin defined by parameter mrg.
+    # Alternatively, coords might be defined by the coordinates of a particular 
+    # window that one might be interested in. Would require changing this code.
+    coords <- list(rbind(c(minx1,miny2), c(minx1,maxy2),
+                         c(maxx1,maxy2), c(maxx1,miny2), c(minx1,miny2)))
+    # Turn bounding coords into an sfc_POLYGON object and inherit CRS from x
+    pg = st_sfc(st_polygon(coords), crs = st_crs(x))
+
+    # Create a hexagonal grid --> sfc_POLYGON object
+    hexPol <- st_make_grid(pg, cellsize = cellsize, square = FALSE)
+
+    hexPol_npts <- aggregate(x[1], hexPol, length) %>%
+                  replace(is.na(.), 0) #%>% rename(npts_hex = id)
+
+    return(hexPol_npts)
+}
+```
+
+
+```{r, eval = FALSE}
+hexRef = MyHexBin(accidents, st_bbox(accidents))
+
+hexFoc = MyHexBin(bycicle, st_bbox(accidents)) %>%
+  mutate(expect = (nrow(bycicle) / nrow(accidents)) * hexRef$ïAccUID) %>%
+  mutate(chi = (ïAccUID-expect)/sqrt(expect),
+         id = row_number())
+
+# saveRDS(hexFoc, "rds/Chi_Hex_Bicycles.rds")
+```
+
+
+
+
+
+

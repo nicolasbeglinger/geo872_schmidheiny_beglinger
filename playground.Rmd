@@ -1,0 +1,58 @@
+---
+title: "playground.rmd"
+author: "Nicolas Beglinger"
+date: "11/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE, message = FALSE}
+library(sf)
+library(tidyverse)
+library(sp)
+library(ggmap)
+library(ggraph)
+library(leaflet)
+library(spatstat)
+library(readxl)
+library(adehabitatHR)
+library(stats)
+library(ks)
+library(tmap)
+```
+
+
+```{r}
+outlineZuerich <- st_read("shapefiles/border/polygon_stadt_zuerich.shp")
+
+streets <- st_intersection(st_read("shapefiles/streetPolygon/AV_zuerich_2019_strassen_1mBuffer_dissolved_simplified_singlePart.shp"),
+                           outlineZuerich)
+```
+
+```{r}
+
+data_points = st_read("shapefiles/accidents/verkehrsunfaelle_stadt_zh_points_new.shp")
+
+filtered = filter(data_points, 
+                  AccdSC_ == "Accident with fatalities" | AccdSC_ == "Accident with severe injuries")
+```
+
+
+```{r}
+accidentsIntersect = st_intersection(data_points, streets)
+st_write(accidentsIntersect, "shapefiles/accidents/accidentsOnRoads_ZH.shp", driver = "ESRI Shapefile")
+```
+
+
+```{r}
+ggplot() +
+  geom_sf(data = accidentsIntersect)
+```
+
+
+
+
+

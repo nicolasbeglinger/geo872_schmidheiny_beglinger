@@ -1,0 +1,94 @@
+---
+title: "Hex Binning"
+author: "Nicolas Beglinger"
+date: "11/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sf)
+library(tidyverse)
+library(sp)
+library(ggmap)
+library(ggraph)
+library(leaflet)
+library(spatstat)
+library(readxl)
+library(adehabitatHR)
+library(stats)
+library(ks)
+library(tmap)
+```
+
+
+```{r}
+data_points = st_read("shapefiles/accidents/verkehrsunfaelle_stadt_zh_points_new.shp")
+
+filtered = filter(data_points, 
+                  AccdSC_ == "Accident with fatalities" | AccdSC_ == "Accident with severe injuries")
+```
+
+```{r}
+MyHexBin <- function(x, cellsize = 100, mrg = 100)
+{
+    require(sf)
+    x1 <- st_coordinates(x)[,1]
+    y2 <- st_coordinates(x)[,2]
+    minx1 <- min(x1) - mrg
+    maxx1 <- max(x1) + mrg
+    miny2 <- min(y2) - mrg
+    maxy2 <- max(y2) + mrg
+
+    # coords defines the bounding rectangle of the hexagonal tessellation,
+    # including the margin defined by parameter mrg.
+    # Alternatively, coords might be defined by the coordinates of a particular 
+    # window that one might be interested in. Would require changing this code.
+    coords <- list(rbind(c(minx1,miny2), c(minx1,maxy2),
+                         c(maxx1,maxy2), c(maxx1,miny2), c(minx1,miny2)))
+    # Turn bounding coords into an sfc_POLYGON object and inherit CRS from x
+    pg = st_sfc(st_polygon(coords), crs = st_crs(x))
+
+    # Create a hexagonal grid --> sfc_POLYGON object
+    hexPol <- st_make_grid(pg, cellsize = cellsize, square = FALSE)
+
+    hexPol_npts <- aggregate(x[1], hexPol, length) %>%
+                  replace(is.na(.), 0) #%>% rename(npts_hex = id)
+
+    return(hexPol_npts)
+}
+```
+
+```{r}
+hexPoly <- MyHexBin(filtered, cellsize = 100, mrg = 150)
+
+hexPoly
+
+
+hexPoly <- filter(hexPoly,
+                  ïAccUID > 0)
+
+plot(hexPoly)
+plot(outlineZuerich, add = TRUE)
+
+```
+
+```{r}
+tm_shape(hexPoly) +
+  tm_polygons(
+    col = "ïAccUID",
+    alpha = 0.5,
+    palette = "inferno",
+    n = 10
+  )
+
+
+
+```
+
+
+
+

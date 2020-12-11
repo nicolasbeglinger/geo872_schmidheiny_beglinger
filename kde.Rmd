@@ -1,0 +1,96 @@
+---
+title: "KDE"
+author: "Nicolas Beglinger"
+date: "11/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(sf)
+library(tidyverse)
+library(sp)
+library(ggmap)
+library(ggraph)
+library(leaflet)
+library(spatstat)
+library(readxl)
+library(adehabitatHR)
+library(stats)
+library(ks)
+```
+
+Read in the data and make an sf-object
+
+```{r}
+csv_data <- read.csv("raw_data/verkehrsunfälle_stadt_zh_relevant_komma.csv")
+data_points <- st_as_sf(csv_data,  coords = c("AccidentLocation_CHLV95_E", "AccidentLocation_CHLV95_N"), crs = 2056)
+```
+
+```{r}
+glimpse(data_points)
+
+filtered = filter(data_points, 
+                  AccidentSeverityCategory_en == "Accident with fatalities" | AccidentSeverityCategory_en == "Accident with severe injuries")
+```
+
+```{r, message = FALSE}
+crds = st_coordinates(filtered)
+win <- as.owin(st_bbox(filtered))
+
+filter_ppp <- ppp(x = crds[,1], y = crds[,2], window = win)
+
+plot(density(filter_ppp, sigma = 200), 
+     main = "Ungulates in SNP, with density() and bandwidth sigma = 50")
+plot(filter_ppp, add = TRUE, pch = 0.5, cex = 0.01, col = "white")
+```
+
+```{r}
+H = Hlscv(x = crds)
+fkde <- kde(crds, H = H)
+
+plot(fkde, display = "filled.contour2", 
+     main = "Unweighted KDE; plug-in bandwidth", asp = 1) +
+  plot(filtered, cex = 0.5, pch = 10, col = "black", add = TRUE)
+
+```
+
+```{r}
+fatal <- data_points %>% 
+  filter(AccidentSeverityCategory_en == "Accident with fatalities") %>%
+  mutate(weight = 5)
+sever <- data_points %>% 
+  filter(AccidentSeverityCategory_en == "Accident with severe injuries") %>%
+  mutate(weight = 1)
+
+new <- rbind(fatal, sever)
+```
+
+```{r}
+H = Hlscv(x = crds)
+fkde_w <- kde(crds, 
+              H = H, 
+              w = new$weight)
+
+plot(fkde_w, 
+     display = "filled.contour2", 
+     main = "Unweighted KDE; plug-in bandwidth", 
+     asp = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
