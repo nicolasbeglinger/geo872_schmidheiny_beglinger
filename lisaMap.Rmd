@@ -109,6 +109,8 @@ chi = tm_shape(bycicles %>%
 tmap_arrange(chi,
              lisa,
              sync = TRUE)
+
+
 ```
 
 
