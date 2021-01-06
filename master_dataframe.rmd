@@ -38,39 +38,70 @@ source("functions.r")
 ```{r}
 accidents <- st_read("shapefiles/accidents/verkehrsunfaelle_stadt_zh_points_new.shp")
 accNoHighway <- filter(accidents, RdTyp_n != "Motorway" & RdTyp_n != "Expressway")
+
 bicycle = filter(accidents, AccdnIB == "true")
+motorCycle = filter(accidents, AccdnIM == "true")
+pedestrians = filter(accidents, AccdnIP == "true")
+
 
 bicycleSevere = filter(bicycle, AccdSC_ == "Accident with severe injuries" | AccdSC_ == "Accident with fatalities")
+motorCycleSevere = filter(motorCycle, AccdSC_ == "Accident with severe injuries" | AccdSC_ == "Accident with fatalities" )
+pedestriansSevere = filter(pedestrians, AccdSC_ == "Accident with severe injuries"| AccdSC_ == "Accident with fatalities")
+
+
 ```
 
-*From the ChiMap function*
+
+
 ```{r}
-hexRef = MyHexBin(accNoHighway, st_bbox(accNoHighway), cellsize = 100, mrg = 100)
-    
-hexFoc = MyHexBin(bicycle, st_bbox(accNoHighway), cellsize = 100, mrg = 100) %>%
-  mutate(expect = (nrow(bicycle) / nrow(accNoHighway)) * hexRef$ïAccUID) %>%
-  mutate(chi = (ïAccUID-expect)/sqrt(expect),
-         id = row_number())
+masterBicycle =  masterDataFrame(bicycle, accNoHighway, motorCycleSevere, focusFilter = 10, alpha = 0.01)
+#st_write(masterBicycle, "shapefiles/hexBins/master_bicycle_new.shp")
 
-hexSevere = MyHexBin(bicycleSevere, st_bbox(accNoHighway), cellsize = 100, mrg = 100)
 
+
+masterPedestrians = masterDataFrame(pedestrians, accNoHighway, motorCycleSevere, focusFilter = 15, alpha = 0.01)
+#st_write(masterMotorCycle, "shapefiles/hexBins/master_pedestrians.shp", append = FALSE)
 ```
 
 
-*Create p-values with poisson distribution (lambda = expected value) and mutate all non significant chi's to zero/ delete them*
 ```{r}
-hexFocP = hexFoc %>%
-  mutate(p = dpois(ïAccUID, lambda = expect) + ppois(ïAccUID, lambda = expect, lower.tail = FALSE),
-         chi = chi*(p<=0.01), ratio = ïAccUID / hexRef$ïAccUID, bic = ïAccUID, severe = hexSevere$ïAccUID, sevrat = severe / bic) %>%
-  select(2:10)
+masterMotorCycle = masterDataFrame(motorCycle, accidents, motorCycleSevere, focusFilter = 5, alpha = 0.01)
 
-#ppois(11, lambda = 5, lower.tail = FALSE)
+masterMotorCycle <- masterMotorCycle %>%
+  arrange(-ratio) %>%
+  mutate(rat_rank = seq(1:nrow(.))) %>%
+  arrange(p) %>%
+  mutate(p_rank = seq(1:nrow(.))) %>%
+  mutate(mot_rank = rep(NaN, nrow(.))) %>%
+  mutate(sev_rank = rep(NaN, nrow(.)))
 
-hexFocP_filtered = hexFocP %>%
-  filter(chi != 0 & bic > 9 & ratio >= 0.2)
 
-st_write(hexFocP_filtered, "shapefiles/hexBins/master_bicycle.shp")
+masterMotorCycle
+
+st_write(masterMotorCycle, "shapefiles/hexBins/master_motorCycle.shp", append = FALSE)
 
 ```
+
+```{r}
+masterPedestrians = masterDataFrame(pedestrians, accNoHighway, motorCycleSevere, focusFilter = 5, alpha = 0.01)
+
+
+masterPedestrians <- masterPedestrians %>%
+  arrange(-ratio) %>%
+  mutate(rat_rank = seq(1:nrow(.))) %>%
+  arrange(p) %>%
+  mutate(p_rank = seq(1:nrow(.))) %>%
+  mutate(ped_rank = rep(NaN, nrow(.))) %>%
+  mutate(sev_rank = rep(NaN, nrow(.)))
+
+
+masterPedestrians
+
+st_write(masterPedestrians, "shapefiles/hexBins/master_pedestrians.shp", append = FALSE)
+```
+
+
+
+
 
 

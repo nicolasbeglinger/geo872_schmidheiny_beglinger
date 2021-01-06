@@ -73,9 +73,9 @@ MyHexBin <- function(x, extent = NA, cellsize = 100, mrg = 100)
 countMap = function(hexBinFunction, data, cellsize = 100, title, datapoints, pointopacity = 1, mode = "view") {
   
   hexData = MyHexBin(data, st_bbox(accidents), cellsize = cellsize, mrg = 100) %>%
-    filter(!�AccUID == 0)
+    filter(!ïAccUID == 0)
   
-  quantDiff = quantile(hexData$�AccUID, probs = seq(0,1,0.0025))
+  quantDiff = quantile(hexData$ïAccUID, probs = seq(0,1,0.0025))
   
   if (mode == "view") {
     tm_shape(datapoints) +
@@ -85,19 +85,19 @@ countMap = function(hexBinFunction, data, cellsize = 100, title, datapoints, poi
       ) +
       tm_shape(hexData) +
       tm_polygons(
-        col = "�AccUID",
-        id = "�AccUID",
+        col = "ïAccUID",
+        id = "ïAccUID",
         palette = c("#F7F7F7", "#F6B596", "#CB4A42", "#67001F"),
         alpha = 0.7,
         style = "fixed",
-        breaks = c(min(hexData$�AccUID),
+        breaks = c(min(hexData$ïAccUID),
                    quantDiff[320], 
                    quantDiff[360],
                    quantDiff[376],
                    quantDiff[393],
                    quantDiff[397],
                    quantDiff[400],
-                   max(hexData$�AccUID)),
+                   max(hexData$ïAccUID)),
         lwd = 0.1
       ) +
       tm_layout(title = title)
@@ -117,8 +117,8 @@ chiMap = function(hexBinFunction, reference, focus, cellsize, title, focuspoints
   hexRef = hexBinFunction(reference, st_bbox(reference), cellsize = cellsize, mrg = 100)
   
   hexFoc = MyHexBin(focus, st_bbox(reference), cellsize = cellsize, mrg = 100) %>%
-    mutate(expect = (nrow(focus) / nrow(reference)) * hexRef$�AccUID) %>%
-    mutate(chi = (�AccUID-expect)/sqrt(expect),
+    mutate(expect = (nrow(focus) / nrow(reference)) * hexRef$ïAccUID) %>%
+    mutate(chi = (ïAccUID-expect)/sqrt(expect),
            id = row_number()) %>%
     filter(!is.na(chi))
   
@@ -234,6 +234,35 @@ MyShiftBins <- function(x, extent = NA, cellsize = 100, mrg = 100) {
   }
   
   return(xy)
+}
+
+masterDataFrame <- function(focus, reference, severe, focusFilter = 5, ratioFilter = ((nrow(focus) / nrow(reference)) * 2), alpha = 0.01) {
+  hexRef = MyHexBin(reference, st_bbox(reference), cellsize = 100, mrg = 100)
+  
+  hexFoc = MyHexBin(focus, st_bbox(reference), cellsize = 100, mrg = 100) %>%
+    mutate(expect = (nrow(focus) / nrow(reference)) * hexRef$ïAccUID) %>%
+    mutate(chi = (ïAccUID-expect)/sqrt(expect),
+           id = row_number())
+  
+  hexSevere = MyHexBin(severe, st_bbox(reference), cellsize = 100, mrg = 100)
+  
+  #Create p-values with poisson distribution (lambda = expected value) and mutate all non significant chi's to zero/ delete them
+
+  master = hexFoc %>%
+    mutate(p = dpois(ïAccUID, lambda = expect) + ppois(ïAccUID, lambda = expect, lower.tail = FALSE),
+           chi = chi*(p <= alpha), 
+           ratio = ïAccUID / hexRef$ïAccUID, 
+           focus = ïAccUID, 
+           severe = hexSevere$ïAccUID, 
+           sevrat = severe / focus) %>%
+    select(2:10)
+  
+  master_filtered = master %>%
+    filter(chi != 0 & focus >= focusFilter, ratio >= ratioFilter)
+  
+  
+  return(master_filtered)
+  
 }
 
 
