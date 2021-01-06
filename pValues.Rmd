@@ -1,0 +1,106 @@
+---
+title: "pValues"
+author: "Nicolas Beglinger & Nicolas Schmidheiny"
+date: "12/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initialize
+```{r, echo = FALSE, message = FALSE}
+pkgTest <- function(x) 
+  {
+    if (!require(x, character.only = TRUE))
+    {
+      install.packages(x, dep = TRUE)
+        if(!require(x, character.only = TRUE)) stop("Package not found")
+    }
+}
+
+pkgTest("sf")
+pkgTest("tidyverse")
+pkgTest("tmap")
+
+#for palette explorer
+pkgTest("tmaptools")
+pkgTest("shiny")
+pkgTest("shinyjs")
+
+
+crs_lv95  <- "+init=epsg:2056"
+
+tmap_mode("view")
+source("functions.r")
+```
+
+```{r}
+accidents <- st_read("shapefiles/accidents/verkehrsunfaelle_stadt_zh_points_new.shp")
+accNoHighway <- filter(accidents, RdTyp_n != "Motorway" & RdTyp_n != "Expressway")
+bicycle = filter(accidents, AccdnIB == "true")
+
+
+```
+
+*From the ChiMap function*
+```{r}
+hexRef = MyHexBin(accNoHighway, st_bbox(accNoHighway), cellsize = 100, mrg = 100)
+    
+hexFoc = MyHexBin(bicycle, st_bbox(accNoHighway), cellsize = 100, mrg = 100) %>%
+  mutate(expect = (nrow(bicycle) / nrow(accNoHighway)) * hexRef$ïAccUID) %>%
+  mutate(chi = (ïAccUID-expect)/sqrt(expect),
+         id = row_number())
+
+```
+
+*Create p-values with poisson distribution (lampbda = expected value) and mutate all non significant chi's to zero/ delete them*
+```{r}
+hexFocP = hexFoc %>%
+  mutate(p = dpois(ïAccUID, lambda = expect) + ppois(ïAccUID, lambda = expect, lower.tail = FALSE),
+         chi = chi*(p<=0.01), ratio = ïAccUID / hexRef$ïAccUID)
+
+#ppois(11, lambda = 5, lower.tail = FALSE)
+
+hexFocP_filtered = hexFocP %>%
+  filter(chi != 0 & ïAccUID > 9 & ratio >= 0.2)
+
+#dpois(12, lambda = 5) + ppois(12, lambda = 5, lower.tail = FALSE)
+
+
+tm_shape(hexFocP) +
+  tm_polygons(
+    col = "p",
+    alpha = 0.7,
+    lwd = 0.1
+  )
+
+
+quantDiff = quantile(hexFocP_noZero$chi, probs = seq(0,1,0.0025))
+
+
+tm_shape(hexFocP_noZero) +
+    tm_polygons(
+      col = "chi",
+      id = "chi",
+      palette = c("#F7F7F7", "#F6B596", "#CB4A42", "#67001F"),
+      alpha = 0.7,
+      style = "fixed",
+      breaks = c(min(hexFocP_noZero$chi), 
+                 #quantDiff[2] 
+                 quantDiff[9], 
+                 quantDiff[40], 
+                 quantDiff[360], 
+                 quantDiff[393],
+                 #quantDiff[400], 
+                 max(hexFocP_noZero$chi)),
+      lwd = 0.1
+    )
+```
+
+
+
+
+
+

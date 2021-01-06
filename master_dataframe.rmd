@@ -1,0 +1,76 @@
+---
+title: "master_dataframe"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initialize
+```{r, echo = FALSE, message = FALSE}
+pkgTest <- function(x) 
+  {
+    if (!require(x, character.only = TRUE))
+    {
+      install.packages(x, dep = TRUE)
+        if(!require(x, character.only = TRUE)) stop("Package not found")
+    }
+}
+
+pkgTest("sf")
+pkgTest("tidyverse")
+pkgTest("tmap")
+
+#for palette explorer
+pkgTest("tmaptools")
+pkgTest("shiny")
+pkgTest("shinyjs")
+
+
+crs_lv95  <- "+init=epsg:2056"
+
+tmap_mode("view")
+source("functions.r")
+```
+
+
+```{r}
+accidents <- st_read("shapefiles/accidents/verkehrsunfaelle_stadt_zh_points_new.shp")
+accNoHighway <- filter(accidents, RdTyp_n != "Motorway" & RdTyp_n != "Expressway")
+bicycle = filter(accidents, AccdnIB == "true")
+
+bicycleSevere = filter(bicycle, AccdSC_ == "Accident with severe injuries" | AccdSC_ == "Accident with fatalities")
+```
+
+*From the ChiMap function*
+```{r}
+hexRef = MyHexBin(accNoHighway, st_bbox(accNoHighway), cellsize = 100, mrg = 100)
+    
+hexFoc = MyHexBin(bicycle, st_bbox(accNoHighway), cellsize = 100, mrg = 100) %>%
+  mutate(expect = (nrow(bicycle) / nrow(accNoHighway)) * hexRef$ïAccUID) %>%
+  mutate(chi = (ïAccUID-expect)/sqrt(expect),
+         id = row_number())
+
+hexSevere = MyHexBin(bicycleSevere, st_bbox(accNoHighway), cellsize = 100, mrg = 100)
+
+```
+
+
+*Create p-values with poisson distribution (lambda = expected value) and mutate all non significant chi's to zero/ delete them*
+```{r}
+hexFocP = hexFoc %>%
+  mutate(p = dpois(ïAccUID, lambda = expect) + ppois(ïAccUID, lambda = expect, lower.tail = FALSE),
+         chi = chi*(p<=0.01), ratio = ïAccUID / hexRef$ïAccUID, bic = ïAccUID, severe = hexSevere$ïAccUID, sevrat = severe / bic) %>%
+  select(2:10)
+
+#ppois(11, lambda = 5, lower.tail = FALSE)
+
+hexFocP_filtered = hexFocP %>%
+  filter(chi != 0 & bic > 9 & ratio >= 0.2)
+
+st_write(hexFocP_filtered, "shapefiles/hexBins/master_bicycle.shp")
+
+```
+
+
